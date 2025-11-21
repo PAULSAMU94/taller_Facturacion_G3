@@ -20,6 +20,11 @@
     .eliminar { background: #dc3545; }
     .eliminar:hover { background: #a71d2a; }
 </style>
+<script>
+    if(sessionStorage.getItem("loggedIn") !== "true"){
+        window.location.href = "/";
+    }
+</script>
 </head>
 <body>
 <h1>Factura Profesional - Stock Dinámico</h1>
