@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Factura Profesional - Stock Dinámico</title>
+<style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; background: #f9f9f9; }
+    h1 { text-align: center; color: #333; }
+    label { display: block; margin-top: 10px; font-weight: bold; }
+    input, select, button { padding: 6px; margin-top: 5px; font-size: 14px; }
+    button { cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+    button:hover { background: #0056b3; }
+    #mensaje { color: red; margin-top: 10px; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+    table, th, td { border: 1px solid #ccc; }
+    th { background: #007bff; color: white; padding: 10px; }
+    td { padding: 10px; text-align: center; }
+    tr:nth-child(even) { background: #f2f2f2; }
+    .resultado { margin-top: 20px; padding: 15px; border: 1px solid #ccc; background: #fff; }
+    .eliminar { background: #dc3545; }
+    .eliminar:hover { background: #a71d2a; }
+</style>
+</head>
+<body>
+<h1>Factura Profesional - Stock Dinámico</h1>
+
+<label>Cliente:
+    <input type="text" id="cliente" value="Cliente Demo">
+</label>
+
+<label>Buscar producto:
+    <input type="text" id="buscar" onkeyup="filtrarProductos()">
+</label>
+
+<label>Producto:
+    <select id="producto"></select>
+</label>
+
+<label>Cantidad:
+    <input type="number" id="cantidad" value="1" min="1">
+</label>
+
+<button onclick="agregarProducto()">Agregar Producto</button>
+<button onclick="crearFactura()">Generar Factura</button>
+
+<div id="mensaje"></div>
+
+<table id="tablaProductos">
+    <thead>
+        <tr>
+            <th>Producto</th>
+            <th>Precio</th>
+            <th>Cantidad</th>
+            <th>Total</th>
+            <th>Acción</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<div class="resultado" id="resultado"></div>
+
+<script>
+let productos = [
+  { id: 1, nombre: "Laptop", precio: 800, stock: 5 },
+  { id: 2, nombre: "Mouse", precio: 10, stock: 30 },
+  { id: 3, nombre: "Teclado", precio: 25, stock: 20 },
+  { id: 4, nombre: "Monitor", precio: 150, stock: 10 },
+  { id: 5, nombre: "Impresora", precio: 100, stock: 8 },
+  { id: 6, nombre: "Cable HDMI", precio: 5, stock: 50 },
+  { id: 7, nombre: "Disco Duro", precio: 50, stock: 15 },
+  { id: 8, nombre: "Router", precio: 40, stock: 12 }
+];
+let itemsFactura = [];
+
+// Cargar productos en el select
+function cargarProductos() {
+    const select = document.getElementById("producto");
+    select.innerHTML = "";
+    productos.forEach(p => {
+        const option = document.createElement("option");
+        option.value = p.id;
+        option.textContent = `${p.nombre} - $${p.precio} (Stock: ${p.stock})`;
+        select.appendChild(option);
+    });
+}
+cargarProductos();
+
+// Filtrar productos por nombre
+function filtrarProductos() {
+    const filtro = document.getElementById("buscar").value.toLowerCase();
+    const select = document.getElementById("producto");
+    Array.from(select.options).forEach(opt => {
+        opt.style.display = opt.textContent.toLowerCase().includes(filtro) ? "" : "none";
+    });
+}
+
+// Agregar producto a la factura
+function agregarProducto() {
+    const select = document.getElementById("producto");
+    const productoId = parseInt(select.value);
+    const cantidad = parseInt(document.getElementById("cantidad").value);
+    const producto = productos.find(p => p.id === productoId);
+
+    if (!producto) return;
+    if (cantidad > producto.stock) {
+        document.getElementById("mensaje").textContent = `No hay suficiente stock de ${producto.nombre}`;
+        return;
+    }
+    document.getElementById("mensaje").textContent = "";
+
+    // Reducir stock disponible
+    producto.stock -= cantidad;
+
+    const existente = itemsFactura.find(i => i.id === productoId);
+    if (existente) {
+        existente.cantidad += cantidad;
+    } else {
+        itemsFactura.push({ id: producto.id, nombre: producto.nombre, precio: producto.precio, cantidad });
+    }
+
+    actualizarTabla();
+    cargarProductos();
+}
+
+// Eliminar producto de la factura
+function eliminarProducto(id) {
+    const item = itemsFactura.find(i => i.id === id);
+    if (!item) return;
+
+    // Devolver stock al producto original
+    const producto = productos.find(p => p.id === id);
+    if (producto) producto.stock += item.cantidad;
+
+    itemsFactura = itemsFactura.filter(i => i.id !== id);
+    actualizarTabla();
+    cargarProductos();
+}
+
+// Actualizar tabla de productos agregados
+function actualizarTabla() {
+    const tbody = document.querySelector("#tablaProductos tbody");
+    tbody.innerHTML = "";
+    itemsFactura.forEach(i => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${i.nombre}</td>
+            <td>$${i.precio.toFixed(2)}</td>
+            <td>${i.cantidad}</td>
+            <td>$${(i.precio*i.cantidad).toFixed(2)}</td>
+            <td><button class="eliminar" onclick="eliminarProducto(${i.id})">Eliminar</button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Crear factura enviando al backend
+function crearFactura() {
+    const cliente = document.getElementById("cliente").value;
+    if (itemsFactura.length === 0) {
+        document.getElementById("mensaje").textContent = "Agrega al menos un producto";
+        return;
+    }
+
+    fetch("/api/facturas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cliente, items: itemsFactura })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(data.mensaje) {
+            document.getElementById("mensaje").textContent = data.mensaje;
+            return;
+        }
+
+        let html = `<h3>Factura Generada</h3>
+                    <p><b>Cliente:</b> ${data.cliente}</p>
+                    <p><b>Subtotal:</b> $${data.subtotal.toFixed(2)}</p>
+                    <p><b>Total (IVA 12%):</b> $${data.total.toFixed(2)}</p>`;
+        document.getElementById("resultado").innerHTML = html;
+
+        // Limpiar tabla y itemsFactura
+        itemsFactura = [];
+        actualizarTabla();
+        cargarProductos();
+        document.getElementById("mensaje").textContent = "Factura creada con éxito!";
+    })
+    .catch(err => console.error(err));
+}
+</script>
+</body>
+</html>
